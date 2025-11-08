@@ -9,7 +9,7 @@ class AIService:
     
     def __init__(self):
         self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-        self.model = "gpt-4o"  # GPT-4o 또는 gpt-4-turbo 사용
+        self.model = "gpt-4o-mini"  # gpt-4o-mini 사용 (비용 효율적)
     
     async def generate_weather_advice(
         self, 
