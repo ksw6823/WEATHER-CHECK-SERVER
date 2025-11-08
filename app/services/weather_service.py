@@ -9,7 +9,8 @@ class WeatherService:
     
     def __init__(self):
         self.api_key = settings.KMA_API_KEY
-        self.base_url = "http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst"
+        # 기상청 API Hub 엔드포인트 사용
+        self.base_url = "https://apihub.kma.go.kr/api/typ02/openApi/VilageFcstInfoService_2.0/getVilageFcst"
     
     def _convert_to_grid(self, lat: float, lon: float) -> tuple[int, int]:
         """
@@ -94,7 +95,7 @@ class WeatherService:
             base_time = "2300"
         
         params = {
-            "serviceKey": self.api_key,
+            "authKey": self.api_key,  # 기상청 API Hub는 authKey 사용
             "numOfRows": "60",
             "pageNo": "1",
             "dataType": "JSON",
