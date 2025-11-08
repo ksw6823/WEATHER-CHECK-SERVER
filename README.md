@@ -5,11 +5,13 @@
 
 ## 📋 프로젝트 개요
 
-사용자의 위치 정보를 기반으로 기상청 단기예보 데이터를 받아와서, GPT가 친근하고 실용적인 날씨 조언을 생성하는 백엔드 서버입니다.
+사용자의 실시간 위치 정보를 기반으로 기상청 단기예보 데이터를 받아와서, GPT가 친근한 날씨 조언과 체크리스트를 생성하는 백엔드 서버입니다.
 
 ### 주요 기능
-- 🌍 사용자 위치 기반 날씨 정보 조회 (기상청 단기예보 API)
-- 🤖 GPT-5를 활용한 친근한 날씨 조언 생성
+- 🌍 실시간 위치 기반 날씨 정보 조회 (기상청 단기예보 API)
+- 🤖 GPT-4o를 활용한 친근한 날씨 조언 + 체크리스트 생성
+- 🎭 5가지 캐릭터 무드 시스템 (날씨별 다른 반응)
+- 📊 프론트엔드 친화적 상세 날씨 정보 (14+ 필드)
 - 📱 Flutter 앱 연동을 위한 RESTful API
 - 💾 AWS RDS PostgreSQL 데이터베이스 지원
 - 🎯 정확한 좌표 변환 (Lambert Conformal Conic 투영법)
@@ -19,8 +21,9 @@
 - **Framework**: FastAPI 0.104.1
 - **Database**: PostgreSQL (AWS RDS)
 - **ORM**: SQLAlchemy 2.0 (Async)
-- **AI**: OpenAI GPT-5
+- **AI**: OpenAI GPT-4o (JSON response mode)
 - **Weather API**: 기상청 단기예보 API (공공데이터포털)
+- **Validation**: Pydantic 2.5.0, email-validator 2.1.0
 - **Client**: Flutter Mobile App
 
 ## 📁 프로젝트 구조
@@ -199,7 +202,6 @@ vim .env
 ```env
 # Application
 PROJECT_NAME=Weather Check Server
-API_V1_STR=/api/v1
 DEBUG=True
 
 # CORS
@@ -375,10 +377,7 @@ Swagger UI (http://localhost:8000/docs)에서:
 ```json
 {
   "username": "테스트유저",
-  "email": "test@example.com",
-  "latitude": 37.5665,
-  "longitude": 126.9780,
-  "location_name": "서울"
+  "email": "test@example.com"
 }
 ```
 
@@ -400,17 +399,37 @@ Swagger UI (http://localhost:8000/docs)에서:
 ```
 
 4. "Execute" 버튼 클릭
-5. 응답에서 `advice`와 `weather_info` 확인
+5. 응답에서 `message`, `checklist`, `weather_info` 확인
 
 **성공 응답 예시:**
 ```json
 {
-  "advice": "오늘 날씨 딱 좋다! 😊 가벼운 자켓만 걸쳐도 될 것 같아.",
+  "message": "오늘 날씨 딱 좋다! 😊 가벼운 자켓만 걸쳐도 될 것 같아.",
+  "checklist": [
+    "가벼운 외투 챙기기",
+    "선글라스 준비하기",
+    "물병 챙기기"
+  ],
   "weather_info": {
     "temperature": 15.0,
     "sky_condition": "맑음",
     "rain_probability": 20,
-    ...
+    "temp_feeling": "적당해요",
+    "overall_status": "좋음",
+    "overall_emoji": "😊",
+    "character_moods": {
+      "sunny": {
+        "mood": "very_happy",
+        "emoji": "😊",
+        "preference": "맑은 날씨를 좋아해요!"
+      },
+      "rainy": {
+        "mood": "sad",
+        "emoji": "😢",
+        "preference": "비 오는 날을 좋아해요"
+      }
+      // ... 5개 캐릭터 모두
+    }
   }
 }
 ```
@@ -425,9 +444,10 @@ Swagger UI (http://localhost:8000/docs)에서:
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/weather/advice` | 날씨 조언 생성 (메인) |
-| POST | `/weather/users` | 사용자 생성 |
+| POST | `/weather/advice` | 날씨 조언 생성 (메시지 + 체크리스트 + 상세 날씨 정보) |
+| POST | `/weather/users` | 사용자 생성 (username, email만) |
 | GET | `/weather/users/{id}` | 사용자 조회 |
+| PUT | `/weather/users/{id}` | 사용자 수정 (username, email만) |
 
 ### 사용 예시
 
@@ -438,10 +458,7 @@ curl -X POST "http://localhost:8000/weather/users" \
   -H "Content-Type: application/json" \
   -d '{
     "username": "홍길동",
-    "email": "hong@example.com",
-    "latitude": 37.5665,
-    "longitude": 126.9780,
-    "location_name": "서울시 중구"
+    "email": "hong@example.com"
   }'
 ```
 
@@ -460,7 +477,12 @@ curl -X POST "http://localhost:8000/weather/advice" \
 **응답 예시:**
 ```json
 {
-  "advice": "오늘 엄청 춥대! 🥶 두꺼운 패딩 꼭 입고 나가. 목도리도 있으면 좋을 것 같아.",
+  "message": "오늘 엄청 춥대! 🥶 두꺼운 패딩 꼭 입고 나가. 목도리도 있으면 좋을 것 같아.",
+  "checklist": [
+    "두꺼운 패딩 입기",
+    "목도리 챙기기",
+    "핫팩 준비하기"
+  ],
   "weather_info": {
     "temperature": 5.0,
     "precipitation": "없음",
@@ -468,7 +490,25 @@ curl -X POST "http://localhost:8000/weather/advice" \
     "humidity": 45,
     "sky_condition": "맑음",
     "rain_type": "없음",
-    "wind_speed": 2.3
+    "wind_speed": 2.3,
+    "temp_feeling": "추워요",
+    "temp_description": "두꺼운 겨울 외투가 필요해요",
+    "rain_status": "비 없음",
+    "humidity_feeling": "쾌적해요",
+    "wind_feeling": "약한 바람",
+    "overall_status": "좋음",
+    "overall_emoji": "😊",
+    "display_temperature": "5.0°C",
+    "display_rain_probability": "10%",
+    "display_humidity": "45%",
+    "display_wind_speed": "2.3m/s",
+    "character_moods": {
+      "sunny": {"mood": "happy", "emoji": "😊"},
+      "cloudy": {"mood": "normal", "emoji": "😐"},
+      "rainy": {"mood": "sad", "emoji": "😢"},
+      "snowy": {"mood": "very_happy", "emoji": "🤗"},
+      "warm": {"mood": "sad", "emoji": "😢"}
+    }
   }
 }
 ```
@@ -480,31 +520,48 @@ curl -X POST "http://localhost:8000/weather/advice" \
 ```
 ┌─────────────┐
 │ Flutter App │
+│             │
+│ 1. GPS로    │
+│  현재 위치   │
+│  실시간 수집 │
 └──────┬──────┘
-       │ 1. POST /weather/advice
+       │ 2. POST /weather/advice
        │    (user_id, lat, lon)
        ▼
 ┌─────────────────┐
 │   FastAPI 백엔드   │
 │                 │
-│  2. 사용자 조회   │
+│  3. 사용자 조회   │
 │     (PostgreSQL) │
 │                 │
-│  3. 위경도 →     │
+│  4. 위경도 →     │
 │     격자 변환     │
 │                 │
-│  4. 기상청 API   │
+│  5. 기상청 API   │
 │     호출 및 파싱  │
 │                 │
-│  5. GPT-4o      │
-│     조언 생성    │
+│  6. 날씨 데이터  │
+│     상세화 (14+) │
+│                 │
+│  7. 캐릭터 무드  │
+│     계산 (5종)   │
+│                 │
+│  8. GPT-4o      │
+│     조언+체크리스트│
 └──────┬──────────┘
-       │ 6. Response
-       │    (advice + weather_info)
+       │ 9. Response
+       │    (message + checklist + 
+       │     weather_info + character_moods)
        ▼
 ┌─────────────┐
 │ Flutter App │
-│ (화면 표시)  │
+│             │
+│ 10. 선택된  │
+│   캐릭터의   │
+│   무드 표시  │
+│             │
+│ 11. 체크리스트│
+│    UI 렌더링 │
 └─────────────┘
 ```
 
@@ -517,12 +574,11 @@ curl -X POST "http://localhost:8000/weather/advice" \
 | id | Integer | Primary Key | 사용자 ID |
 | username | String | Unique, Not Null | 사용자명 |
 | email | String | Unique | 이메일 |
-| latitude | Float | Not Null | 위도 |
-| longitude | Float | Not Null | 경도 |
-| location_name | String | Nullable | 지역명 |
 | is_active | Boolean | Default: True | 활성 상태 |
 | created_at | DateTime | Auto | 생성 시간 |
 | updated_at | DateTime | Auto | 수정 시간 |
+
+> ⚠️ **MVP 설계**: 위치 정보는 저장하지 않습니다. 사용자는 이동하므로 매 요청마다 Flutter 앱에서 실시간 GPS 위치를 전송합니다.
 
 ## 🌐 외부 API
 
@@ -540,11 +596,14 @@ curl -X POST "http://localhost:8000/weather/advice" \
   - WSD (풍속)
 
 ### 2. OpenAI API
-- **Model**: GPT-5
+- **Model**: GPT-4o (gpt-4o)
 - **Temperature**: 0.7
-- **Max Tokens**: 150
-- **용도**: 날씨 데이터 기반 친근한 조언 생성
-- **톤**: 친근한 반말, 이모지 1-2개
+- **Max Tokens**: 500
+- **Response Format**: JSON mode (structured output)
+- **용도**: 날씨 데이터 기반 친근한 조언 + 체크리스트 생성
+- **출력 구조**: 
+  - `message`: 친근한 날씨 조언 (반말, 이모지 1-2개)
+  - `checklist`: 행동 체크리스트 3-5개 항목
 
 ## 📱 Flutter 연동 가이드
 
@@ -562,35 +621,111 @@ dependencies:
 // lib/models/weather_advice.dart
 class WeatherAdviceRequest {
   final int userId;
-  final double? latitude;
-  final double? longitude;
+  final double latitude;
+  final double longitude;
 
   WeatherAdviceRequest({
     required this.userId,
-    this.latitude,
-    this.longitude,
+    required this.latitude,
+    required this.longitude,
   });
 
   Map<String, dynamic> toJson() => {
     'user_id': userId,
-    if (latitude != null) 'latitude': latitude,
-    if (longitude != null) 'longitude': longitude,
+    'latitude': latitude,
+    'longitude': longitude,
   };
 }
 
 class WeatherAdviceResponse {
-  final String advice;
+  final String message;
+  final List<String> checklist;
   final WeatherInfo weatherInfo;
 
   WeatherAdviceResponse({
-    required this.advice,
+    required this.message,
+    required this.checklist,
     required this.weatherInfo,
   });
 
   factory WeatherAdviceResponse.fromJson(Map<String, dynamic> json) {
     return WeatherAdviceResponse(
-      advice: json['advice'],
+      message: json['message'],
+      checklist: List<String>.from(json['checklist']),
       weatherInfo: WeatherInfo.fromJson(json['weather_info']),
+    );
+  }
+}
+
+class WeatherInfo {
+  final double temperature;
+  final String skyCondition;
+  final int rainProbability;
+  final String tempFeeling;
+  final String overallStatus;
+  final String overallEmoji;
+  final Map<String, CharacterMood> characterMoods;
+  
+  // Display용 formatted strings
+  final String displayTemperature;
+  final String displayRainProbability;
+  final String displayHumidity;
+  final String displayWindSpeed;
+
+  WeatherInfo({
+    required this.temperature,
+    required this.skyCondition,
+    required this.rainProbability,
+    required this.tempFeeling,
+    required this.overallStatus,
+    required this.overallEmoji,
+    required this.characterMoods,
+    required this.displayTemperature,
+    required this.displayRainProbability,
+    required this.displayHumidity,
+    required this.displayWindSpeed,
+  });
+
+  factory WeatherInfo.fromJson(Map<String, dynamic> json) {
+    return WeatherInfo(
+      temperature: json['temperature'].toDouble(),
+      skyCondition: json['sky_condition'],
+      rainProbability: json['rain_probability'],
+      tempFeeling: json['temp_feeling'],
+      overallStatus: json['overall_status'],
+      overallEmoji: json['overall_emoji'],
+      characterMoods: (json['character_moods'] as Map<String, dynamic>)
+          .map((key, value) => MapEntry(key, CharacterMood.fromJson(value))),
+      displayTemperature: json['display_temperature'],
+      displayRainProbability: json['display_rain_probability'],
+      displayHumidity: json['display_humidity'],
+      displayWindSpeed: json['display_wind_speed'],
+    );
+  }
+  
+  // 선택된 캐릭터의 무드 가져오기
+  CharacterMood getMoodForCharacter(String characterType) {
+    return characterMoods[characterType] ?? 
+        CharacterMood(mood: 'normal', emoji: '😐', preference: '');
+  }
+}
+
+class CharacterMood {
+  final String mood;  // very_happy, happy, normal, sad
+  final String emoji;
+  final String preference;
+
+  CharacterMood({
+    required this.mood,
+    required this.emoji,
+    required this.preference,
+  });
+
+  factory CharacterMood.fromJson(Map<String, dynamic> json) {
+    return CharacterMood(
+      mood: json['mood'],
+      emoji: json['emoji'],
+      preference: json['preference'],
     );
   }
 }
@@ -602,22 +737,24 @@ class WeatherAdviceResponse {
 // lib/services/weather_api_service.dart
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:geolocator/geolocator.dart';
 
 class WeatherApiService {
   static const String baseUrl = 'http://your-server.com';
 
   Future<WeatherAdviceResponse> getWeatherAdvice({
     required int userId,
-    double? latitude,
-    double? longitude,
   }) async {
+    // 실시간 위치 가져오기
+    Position position = await Geolocator.getCurrentPosition();
+    
     final response = await http.post(
       Uri.parse('$baseUrl/weather/advice'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'user_id': userId,
-        if (latitude != null) 'latitude': latitude,
-        if (longitude != null) 'longitude': longitude,
+        'latitude': position.latitude,
+        'longitude': position.longitude,
       }),
     );
 
@@ -625,6 +762,70 @@ class WeatherApiService {
       return WeatherAdviceResponse.fromJson(jsonDecode(response.body));
     } else {
       throw Exception('Failed to get weather advice');
+    }
+  }
+}
+```
+
+### UI 예시 (캐릭터 무드 표시)
+
+```dart
+// lib/widgets/weather_character_widget.dart
+class WeatherCharacterWidget extends StatelessWidget {
+  final WeatherAdviceResponse weatherData;
+  final String selectedCharacter;  // 'sunny', 'cloudy', 'rainy', 'snowy', 'warm'
+
+  const WeatherCharacterWidget({
+    required this.weatherData,
+    required this.selectedCharacter,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final characterMood = weatherData.weatherInfo
+        .getMoodForCharacter(selectedCharacter);
+    
+    return Column(
+      children: [
+        // 캐릭터 이미지 (무드에 따라 다른 이미지)
+        Image.asset('assets/characters/${selectedCharacter}_${characterMood.mood}.png'),
+        
+        // 캐릭터 이모지 및 상태
+        Text(
+          '${characterMood.emoji} ${_getMoodText(characterMood.mood)}',
+          style: TextStyle(fontSize: 24),
+        ),
+        
+        // 날씨 조언
+        Padding(
+          padding: EdgeInsets.all(16),
+          child: Text(
+            weatherData.message,
+            style: TextStyle(fontSize: 18),
+          ),
+        ),
+        
+        // 체크리스트
+        ...weatherData.checklist.map((item) => 
+          CheckboxListTile(
+            title: Text(item),
+            value: false,
+            onChanged: (bool? value) {
+              // 체크리스트 체크 로직
+            },
+          )
+        ).toList(),
+      ],
+    );
+  }
+  
+  String _getMoodText(String mood) {
+    switch (mood) {
+      case 'very_happy': return '매우 행복해요!';
+      case 'happy': return '기분 좋아요';
+      case 'normal': return '괜찮아요';
+      case 'sad': return '별로예요...';
+      default: return '보통이에요';
     }
   }
 }
@@ -899,237 +1100,92 @@ pyenv global 3.11.0
 
 이 프로젝트는 **빠른 프로토타이핑**을 위한 MVP입니다:
 
-- ✅ 핵심 기능에 집중 (날씨 조언 생성)
-- ✅ 간단한 사용자 관리 (인증 없음)
+- ✅ 핵심 기능에 집중 (날씨 조언 + 체크리스트 생성)
+- ✅ 간단한 사용자 관리 (인증 없음, user_id만 사용)
+- ✅ 실시간 위치 기반 (DB에 위치 저장 안 함)
+- ✅ 5가지 캐릭터 무드 시스템
+- ✅ 프론트엔드 친화적 상세 날씨 정보
+- ✅ AI 생성 체크리스트
 - ✅ 에러 처리 및 폴백 메커니즘
 - ✅ 외부 API 실패시에도 동작
 - ❌ 사용자 인증/권한 없음 (JWT 등)
 - ❌ 날씨 조언 히스토리 저장 없음
 - ❌ 캐싱 없음
+- ❌ 캐릭터 선택 저장 없음 (Flutter에서 로컬 관리)
+
+## 🎭 캐릭터 시스템
+
+### 5가지 캐릭터 타입
+
+| 캐릭터 | 선호 날씨 | 특징 |
+|--------|----------|------|
+| 🌞 **Sunny** | 맑은 날 | 해가 쨍쨍한 날을 좋아하는 활발한 캐릭터 |
+| ☁️ **Cloudy** | 흐린 날 | 차분하고 조용한 날을 선호하는 사색적 캐릭터 |
+| 🌧️ **Rainy** | 비 오는 날 | 빗소리와 축축한 날씨를 즐기는 감성적 캐릭터 |
+| ❄️ **Snowy** | 추운 날/눈 | 차가운 날씨와 겨울을 사랑하는 시원한 캐릭터 |
+| 🌸 **Warm** | 따뜻한 날 | 포근하고 온화한 봄 날씨를 좋아하는 캐릭터 |
+
+### 무드 레벨
+
+각 캐릭터는 현재 날씨에 따라 4단계 무드를 가집니다:
+
+- � **very_happy**: 가장 좋아하는 날씨 (완벽한 조건)
+- 🙂 **happy**: 좋아하는 날씨 (괜찮은 조건)
+- 😐 **normal**: 보통 날씨 (나쁘지 않음)
+- 😢 **sad**: 싫어하는 날씨 (힘든 조건)
+
+### Flutter 앱에서의 활용
+
+```dart
+// 사용자가 선택한 캐릭터에 맞는 무드 표시
+String selectedCharacter = 'sunny';  // 설정에서 저장된 값
+CharacterMood mood = weatherInfo.getMoodForCharacter(selectedCharacter);
+
+// 무드에 따라 다른 이미지 표시
+String imagePath = 'assets/characters/${selectedCharacter}_${mood.mood}.png';
+```
+
+**예시 시나리오:**
+- 맑은 날 (25°C, 하늘 맑음):
+  - Sunny 캐릭터: 😊 very_happy
+  - Rainy 캐릭터: 😢 sad
+  - Warm 캐릭터: 🙂 happy
+  
+- 비 오는 날 (15°C, 비):
+  - Sunny 캐릭터: 😢 sad
+  - Rainy 캐릭터: 😊 very_happy
+  - Cloudy 캐릭터: 🙂 happy
+
+---
 
 ## 🚀 향후 개선 사항
 
 - [ ] JWT 기반 사용자 인증
 - [ ] 날씨 조언 히스토리 저장
+- [ ] 캐릭터 선택 저장 및 관리
 - [ ] Redis 캐싱 (기상청 API 응답)
 - [ ] 푸시 알림 (아침 날씨 조언)
 - [ ] 다중 위치 즐겨찾기
+- [ ] 캐릭터 커스터마이징 (옷, 액세서리)
+- [ ] 날씨별 캐릭터 애니메이션
 - [ ] 관리자 대시보드
 - [ ] Sentry 에러 모니터링
 - [ ] 로깅 개선
+- [ ] 날씨 통계 및 분석
+
+##  참고 문서
+
+- [API 명세서](./API_SPEC.md) - 전체 API 상세 명세 및 Flutter 연동 가이드
+- [FastAPI 공식 문서](https://fastapi.tiangolo.com/)
+- [기상청 API 가이드](https://www.data.go.kr/tcs/dss/selectApiDataDetailView.do?publicDataPk=15084084)
+- [OpenAI API 문서](https://platform.openai.com/docs/)
+
+---
 
 ## 📄 라이센스
 
 MIT License
 
-## 👨‍💻 개발자
+## �‍� 개발자
 
 Weather Check Server - 코딩마라톤 프로젝트
-
-## 📚 참고 문서
-
-- [API 명세서](./API_SPEC.md)
-- [FastAPI 공식 문서](https://fastapi.tiangolo.com/)
-- [기상청 API 가이드](https://www.data.go.kr/tcs/dss/selectApiDataDetailView.do?publicDataPk=15084084)
-- [OpenAI API 문서](https://platform.openai.com/docs/)
-
-## 📁 프로젝트 구조
-
-```
-WEATHER-CHECK-SERVER/
-├── app/
-│   ├── api/
-│   │   └── v1/
-│   │       ├── api.py              # API 라우터 통합
-│   │       └── endpoints/
-│   │           └── weather.py      # 날씨 조언 엔드포인트
-│   ├── core/
-│   │   ├── config.py               # 설정 관리
-│   │   └── database.py             # DB 연결 설정
-│   ├── models/
-│   │   └── user.py                 # User 모델
-│   ├── schemas/
-│   │   ├── user.py                 # User 스키마
-│   │   └── weather.py              # Weather 스키마
-│   └── services/
-│       ├── weather_service.py      # 기상청 API 서비스
-│       └── ai_service.py           # OpenAI GPT 서비스
-├── tests/
-├── main.py                         # FastAPI 애플리케이션
-├── requirements.txt
-└── .env.example
-```
-
-## 🚀 시작하기
-
-### 1. 환경 설정
-
-```powershell
-# 가상환경 생성 및 활성화
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-
-# 패키지 설치
-pip install -r requirements.txt
-
-# 환경변수 설정
-Copy-Item .env.example .env
-```
-
-### 2. 환경 변수 설정 (.env)
-
-```env
-# Application
-PROJECT_NAME=Weather Check Server
-API_V1_STR=/api/v1
-DEBUG=True
-
-# Database (AWS RDS PostgreSQL)
-DATABASE_URL=postgresql+asyncpg://username:password@your-rds-endpoint.region.rds.amazonaws.com:5432/weather_db
-
-# 기상청 단기예보 API
-KMA_API_KEY=your_kma_api_key_here
-# 발급: https://data.go.kr/
-
-# OpenAI API
-OPENAI_API_KEY=your_openai_api_key_here
-# 발급: https://platform.openai.com/
-```
-
-### 3. 서버 실행
-
-```powershell
-uvicorn main:app --reload
-```
-
-서버 접속: http://localhost:8000  
-API 문서: http://localhost:8000/docs
-
-## 📡 API 엔드포인트
-
-### 1. 날씨 조언 받기 (메인 기능)
-
-```http
-POST /api/v1/weather/advice
-```
-
-**Request Body:**
-```json
-{
-  "user_id": 1,
-  "latitude": 37.5665,
-  "longitude": 126.9780
-}
-```
-
-**Response:**
-```json
-{
-  "advice": "오늘 날씨 딱 좋다! 😊 편하게 입고 나가도 될 것 같아. 혹시 모르니 우산 가져가는 게 좋을 것 같아.",
-  "weather_info": {
-    "temperature": 15.0,
-    "sky_condition": "맑음",
-    "rain_probability": 30,
-    "humidity": 60,
-    "rain_type": "없음",
-    "wind_speed": 2.5
-  }
-}
-```
-
-### 2. 사용자 생성
-
-```http
-POST /api/v1/weather/users
-```
-
-**Request Body:**
-```json
-{
-  "username": "홍길동",
-  "email": "user@example.com",
-  "latitude": 37.5665,
-  "longitude": 126.9780,
-  "location_name": "서울시 중구"
-}
-```
-
-### 3. 사용자 조회
-
-```http
-GET /api/v1/weather/users/{user_id}
-```
-
-## 🔄 서비스 플로우
-
-1. **Flutter 앱** → 사용자 위치 정보와 함께 `/weather/advice` 호출
-2. **백엔드** → 사용자 정보 조회 (PostgreSQL)
-3. **백엔드** → 기상청 단기예보 API 호출 및 데이터 정제
-4. **백엔드** → 정제된 날씨 데이터를 GPT에 전달
-5. **GPT** → 친근하고 실용적인 날씨 조언 생성
-6. **백엔드** → Flutter 앱에 조언 및 날씨 정보 반환
-
-## 🗄️ 데이터베이스
-
-### User 테이블
-
-| Column | Type | Description |
-|--------|------|-------------|
-| id | Integer | Primary Key |
-| username | String | 사용자명 |
-| email | String | 이메일 |
-| latitude | Float | 위도 |
-| longitude | Float | 경도 |
-| location_name | String | 지역명 |
-| is_active | Boolean | 활성 상태 |
-| created_at | DateTime | 생성일 |
-| updated_at | DateTime | 수정일 |
-
-## 🌐 외부 API
-
-### 1. 기상청 단기예보 API
-- **URL**: https://data.go.kr/
-- **서비스**: 동네예보 조회서비스
-- **제공 데이터**: 기온, 강수확률, 습도, 풍속, 하늘상태 등
-
-### 2. OpenAI API
-- **Model**: GPT-4o (또는 GPT-4-turbo)
-- **용도**: 날씨 데이터 기반 친근한 조언 생성
-
-## 📱 Flutter 앱 연동 예시
-
-```dart
-// Dart/Flutter 예시
-Future<WeatherAdvice> getWeatherAdvice(int userId, double lat, double lon) async {
-  final response = await http.post(
-    Uri.parse('http://your-server.com/api/v1/weather/advice'),
-    headers: {'Content-Type': 'application/json'},
-    body: jsonEncode({
-      'user_id': userId,
-      'latitude': lat,
-      'longitude': lon,
-    }),
-  );
-  
-  return WeatherAdvice.fromJson(jsonDecode(response.body));
-}
-```
-
-## 🔧 개발 팁
-
-### 로컬 PostgreSQL 설정 (개발용)
-
-```powershell
-# Docker로 PostgreSQL 실행
-docker run --name weather-postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=weather_db -p 5432:5432 -d postgres:15
-
-# .env 파일 설정
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/weather_db
-```
-
-## 📝 MVP 특징
-
-- 최소한의 기능으로 빠른 프로토타입 개발
-- 간단한 위경도 → 격자 변환 (정확도보다 속도 우선)
-- GPT 조언 생성 실패시 규칙 기반 폴백
-- 기상청 API 실패시 더미 데이터 제공

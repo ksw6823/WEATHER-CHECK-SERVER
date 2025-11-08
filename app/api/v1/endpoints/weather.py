@@ -39,14 +39,15 @@ async def get_weather_advice(
     # 3. 기상청 API로 날씨 정보 가져오기
     weather_data = await weather_service.get_weather_forecast(lat, lon)
     
-    # 4. GPT로 조언 생성
-    advice = await ai_service.generate_weather_advice(
+    # 4. GPT로 조언 생성 (message + checklist)
+    advice_data = await ai_service.generate_weather_advice(
         weather_data=weather_data,
         user_name=user.username
     )
     
     return WeatherAdviceResponse(
-        advice=advice,
+        message=advice_data["message"],
+        checklist=advice_data["checklist"],
         weather_info=weather_data
     )
 
